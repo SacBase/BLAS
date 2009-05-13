@@ -4,12 +4,11 @@ export all except {compress};
 
 use Array: all;
 
-
 inline
 double[.] compress( double[.] vec, int inc)
 {
   res = with {
-          ( . <= iv <= . step [inc]) : vec[iv];
+          ( . <= iv <= . ) : vec[iv*inc];
         } : genarray( shape(vec) / inc);
   return( res);
 }
@@ -29,3 +28,4 @@ double ddot(  int n, double[.] x, int incx, double[.]y, int incy)
   yc = take( [n], compress( y, incy));
   return( sum( xc * yc));
 }
+
