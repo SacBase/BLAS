@@ -1,0 +1,31 @@
+module BlasLevel1;
+
+export all except {compress};
+
+use Array: all;
+
+
+inline
+double[.] compress( double[.] vec, int inc)
+{
+  res = with {
+          ( . <= iv <= . step [inc]) : vec[iv];
+        } : genarray( shape(vec) / inc);
+  return( res);
+}
+
+inline
+double[.] daxpy( int n, double alpha, double[.] x, int incx, double[.]y, int incy)
+{
+  xc = take( [n], compress( x, incx));
+  yc = take( [n], compress( y, incy));
+  return( xc + alpha * yc);
+}
+
+inline
+double ddot(  int n, double[.] x, int incx, double[.]y, int incy)
+{
+  xc = take( [n], compress( x, incx));
+  yc = take( [n], compress( y, incy));
+  return( sum( xc * yc));
+}
