@@ -1,31 +1,139 @@
 module BlasLevel1;
 
-export all except {compress};
+export all except {blasCompress};
 
 use Array: all;
 
 inline
-double[.] compress( double[.] vec, int inc)
+double[.] blasCompress( int n, double[.] vec, int inc)
 {
+  if( inc < 0) {
+    offset = n * (-inc) - 1;
+  } else {
+    offset = 0;
+  }
   res = with {
-          ( . <= iv <= . ) : vec[iv*inc];
-        } : genarray( shape(vec) / inc);
+          ( . <= iv <= . ) : vec[offset + iv*inc];
+        } : genarray( [n], 0d);
   return( res);
 }
 
+
+
+/*
+ * drotg
+ * drotmg
+ * drot
+ * drotm
+ * dswap
+ */
+
+/*
+ * dscal
+ */
+inline
+double[.] dscal( int n, double alpha, double[.] x, int incx)
+{
+  if( (n <= 0) || (incx <= 0)) {
+    res = x;
+  } else {
+    res = with{
+            ([0] <= iv < [n*incx] step [incx]) : alpha * x[iv];
+          } : modarray( x);
+  }
+  return (x);
+}
+
+/*
+ * dcopy
+ */
+inline
+double[.] dcopy( int n, double[.] x, int incx, double[.]y, int incy)
+{
+  if( n <= 0) {
+    res = y;
+  } else {
+    if( incy < 0) {
+      incy = -incy;
+      incx = -incx;
+    }
+    xc = blasCompress( n, x, incx);
+    res = with{
+            ([0] <= iv < [n*incy] step [incy]) : xc[ iv / incy ];
+          } : modarray( y); 
+  }
+  return (res);
+}
+
+
+
+
+
+/*
+ * daxpy
+ */
 inline
 double[.] daxpy( int n, double alpha, double[.] x, int incx, double[.]y, int incy)
 {
-  xc = take( [n], compress( x, incx));
-  yc = take( [n], compress( y, incy));
-  return( xc + alpha * yc);
+  if( n <= 0) {
+    res = x;
+  } else {
+    if( incy < 0) {
+      incy = -incy;
+      incx = -incx;
+    }
+    xc = blasCompress( n, x, incx);
+    res = with{
+            ([0] <= iv < [n*incy] step [incy]) : y[iv] + alpha * xc[ iv / incy ];
+          } : modarray( y);  
+
+  }
+  return( res);
 }
 
+
+
+
+
+/*
+ * ddot
+ */
 inline
 double ddot(  int n, double[.] x, int incx, double[.]y, int incy)
 {
-  xc = take( [n], compress( x, incx));
-  yc = take( [n], compress( y, incy));
-  return( sum( xc * yc));
+  if( n <= 0) {
+    res = 0d;
+  } else {
+    xc = blasCompress( n, x, incx);
+    yc = blasCompress( n, y, incy);
+    res = sum( xc * yc);
+  }
+  return( res);
 }
+
+/*
+ * ddotu
+ * ddotc
+ */
+
+
+/*
+ * dnrm2
+ */
+inline
+double dnrm2( int n, double[.] x, int incx)
+{
+  /*
+   * the fortran version is rather smart! It implicitly scales the
+   * sqares while adding them up to give best possible precision
+   * ....
+   * so this requires quite some more thinking....
+   */
+  return( Math::sqrt( ddot( n, x, incx, x, incx)));
+}
+
+/*
+ * dasum
+ * idamax
+ */
 
