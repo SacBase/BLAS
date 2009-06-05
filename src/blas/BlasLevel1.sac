@@ -120,6 +120,7 @@ double ddot(  int n, double[.] x, int incx, double[.]y, int incy)
 /*
  * dnrm2
  */
+#if  0
 inline
 double dnrm2( int n, double[.] x, int incx)
 {
@@ -131,6 +132,8 @@ double dnrm2( int n, double[.] x, int incx)
    */
   return( Math::sqrt( ddot( n, x, incx, x, incx)));
 }
+
+#endif
 
 /*
  * dasum
