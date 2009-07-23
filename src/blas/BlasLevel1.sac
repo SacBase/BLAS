@@ -4,6 +4,8 @@ export all except {blasCompress};
 
 use Array: all;
 
+#define AKL
+
 inline
 double[.] blasCompress( int n, double[.] vec, int inc)
 {
@@ -31,6 +33,18 @@ double[.] blasCompress( int n, double[.] vec, int inc)
 /*
  * dscal
  */
+#ifdef AKL
+
+inline
+double[.] dscal( double alpha, double[.] x ) {
+
+        x = alpha*x;
+
+  return (x);
+}
+
+#else
+
 inline
 double[.] dscal( int n, double alpha, double[.] x, int incx)
 {
@@ -43,6 +57,8 @@ double[.] dscal( int n, double alpha, double[.] x, int incx)
   }
   return (x);
 }
+
+#endif
 
 /*
  * dcopy
