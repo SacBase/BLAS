@@ -41,7 +41,7 @@ double[.] dscal( int n, double alpha, double[.] x, int incx)
             ([0] <= iv < [n*incx] step [incx]) : alpha * x[iv];
           } : modarray( x);
   }
-  return (x);
+  return (res);
 }
 
 
