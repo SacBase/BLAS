@@ -2,7 +2,368 @@ module BlasLevel1;
 
 export all except {blasCompress};
 
-use Array: all;
+import Array: all;
+import Math: {sqrtf, sign};
+import Complex: {complex, zero, sel, normSq};
+
+
+/*
+ * srotg
+ */
+inline
+float, float, float, float srotg(float a, float b) 
+{
+  if(b == 0f) {
+    r = a;
+    z = 0f;
+    c = 1f;
+    s = 0f;
+  } else if(a == 0f) {
+    r = b;
+    z = 1f;
+    c = 0f;
+    s = 1f;
+  } else {
+    sigma = tof(abs(a) > abs(b) ? sign(a) : sign(b));
+    r = sigma * sqrtf(a*a + b*b);
+    c = a/r;
+    s = b/r;
+    z = abs(a) > abs(b) ? s : c == 0f ? 1f : 1f/c;
+  }
+  return (r, z, c, s);
+}
+
+
+/*
+ * srotmg
+ */
+inline
+float, float, float, float[5] srotmg(float sd1, float sd2, float sx1, float sy1)
+{
+  gam    = 4096f;
+  gamsq  = 1.67772e7f;
+  rgamsq = 5.96046e-8f;
+
+  sflag = 0f;
+  sh11 = 0f;
+  sh21 = 0f;
+  sh12 = 0f;
+  sh22 = 0f;
+
+  if(sd1 < 0f) {
+    sflag = -1f;
+    sd1 = 0f;
+    sd2 = 0f;
+    sx1 = 0f;
+  } else if(sd2*sy1 == 0f) {
+    sflag = -2f;
+  } else {
+    sp2 = sd2*sy1;
+    sp1 = sd1*sx1;
+    sq2 = sp2*sy1;
+    sq1 = sp1*sx1;
+
+    if(abs(sq1) > abs(sq2)) {
+      sh21 = -sy1/sx1;
+      sh12 = sp2/sp1;
+      su = 1f - sh12*sh21;
+
+      if(su > 0f) {
+        sflag = 0f;
+        sd1 /= su;
+        sd2 /= su;
+        sx1 *= su;
+      } else {
+        sflag = -1f;
+        sh11 = 0f;
+        sh21 = 0f;
+        sh12 = 0f;
+        sh22 = 0f;
+        sd1 = 0f;
+        sd2 = 0f;
+        sx1 = 0f;
+      }
+    } else {
+      if(sq2 < 0f) {
+        sflag = -1f;
+        sh11 = 0f;
+        sh21 = 0f;
+        sh12 = 0f;
+        sh22 = 0f;
+        sd1 = 0f;
+        sd2 = 0f;
+        sx1 = 0f;
+      } else {
+        sflag = 1f;
+        sh11 = sp1/sp2;
+        sh22 = sx1/sy1;
+        su = 1f + sh11*sh22;
+        stemp = sd2/su;
+        sd2 = sd1/su;
+        sd1 = stemp;
+        sx1 = sy1*su;
+      }
+    }
+
+    if(sd1 != 0f) {
+      while((sd1 < rgamsq) || (sd1 > gamsq)) {
+        if(sflag == 0f) {
+          sh11 = 1f;
+          sh22 = 1f;
+        } else {
+          sh21 = -1f;
+          sh12 = 1f;
+        }
+
+        sflag = -1f;
+
+        if(sd1 < rgamsq) {
+          sd1 *= gam * gam;
+          sx1 /= gam;
+          sh11 /= gam;
+          sh12 /= gam;
+        } else {
+          sd1 /= gam*gam;
+          sx1 *= gam;
+          sh11 *= gam;
+          sh12 *= gam;
+        }
+      }
+    }
+
+    if(sd2 != 0f) {
+      while((abs(sd2) < rgamsq) || (abs(sd2) > gamsq)) {
+        if(sflag == 0f) {
+          sh11 = 1f;
+          sh22 = 1f;
+        } else {
+          sh21 = -1f;
+          sh12 = 1f;
+        }
+
+        sflag = -1f;
+
+        if(abs(sd2) < rgamsq) {
+          sd2 *= gam * gam;
+          sh21 /= gam;
+          sh22 /= gam;
+        } else {
+          sd2 /= gam*gam;
+          sh21 *= gam;
+          sh22 *= gam;
+        }
+      }
+    }
+  }
+
+  return (sd1, sd2, sx1, [sflag, sh11, sh21, sh12, sh22]);
+}
+
+
+/*
+ * srot
+ */
+inline
+float[.], float[.] srot(int n, float[.] sx, int incx, float[.] sy, int incy, float c, float s)
+{
+  if(n < 1 || incx < 1 || incy < 1) {
+    sx_prime = sx;
+    sy_prime = sy;
+  } else {
+    sx_prime = {i -> c*sx[i] + s*sy[(i*incy)/incx] | [0] <= i < [n*incx] step [incx] ; i -> sx[i]};
+    sy_prime = {i -> c*sy[i] - s*sx[(i*incx)/incy] | [0] <= i < [n*incy] step [incy] ; i -> sy[i]};
+  }
+  return (sx_prime, sy_prime);
+}
+
+
+/*
+ * srotm
+ */
+inline
+float[.], float[.] srotm(int n, float[.] sx, int incx, float[.] sy, int incy, float[5] sparam)
+{
+  sflag = sparam[0];
+  sh11  = sparam[1];
+  sh21  = sparam[2];
+  sh12  = sparam[3];
+  sh22  = sparam[4];
+  
+  if(n < 1 || sflag == -2f) {
+    sx_prime = sx;
+    sy_prime = sy;
+  } else if(sflag < 0f) {
+    sx_prime = {i -> sx[i]*sh11 + sy[(i*incy)/incx]*sh12 | [0] <= i < [n*incx] step [incx] ; i -> sx[i]};
+    sy_prime = {i -> sx[(i*incx)/incy]*sh21 + sy[i]*sh22 | [0] <= i < [n*incy] step [incy] ; i -> sy[i]};
+  } else if(sflag == 0f) {
+    sx_prime = {i -> sx[i] + sy[(i*incy)/incx]*sh12 | [0] <= i < [n*incx] step [incx] ; i -> sx[i]};
+    sy_prime = {i -> sx[(i*incx)/incy]*sh21 + sy[i] | [0] <= i < [n*incy] step [incy] ; i -> sy[i]};
+  } else {
+    sx_prime = {i ->  sx[i]*sh11 + sy[(i*incy)/incx] | [0] <= i < [n*incx] step [incx] ; i -> sx[i]};
+    sy_prime = {i -> -sx[(i*incx)/incy] + sy[i]*sh22 | [0] <= i < [n*incy] step [incy] ; i -> sy[i]};
+  }
+  
+  return (sx_prime, sy_prime);
+}
+
+
+/*
+ * sswap
+ */
+inline
+float[.], float[.] sswap(int n, float[.] sx, int incx, float[.] sy, int incy)
+{
+  if(n < 1 || incx < 1 || incy < 1) {
+    sx_prime = sx;
+    sy_prime = sy;
+  } else {
+    sx_prime = {i -> sy[(i/incx)*incy] | [0] <= i < [n*incx] step [incx] ; i -> sx[i]};
+    sy_prime = {i -> sx[(i/incy)*incx] | [0] <= i < [n*incy] step [incy] ; i -> sy[i]};
+  }
+  return (sx_prime, sy_prime);
+}
+
+
+/*
+ * sscal
+ */
+inline
+float[.] sscal(int n, float sa, float[.] sx, int incx)
+{
+  return {i -> sa * sx[i] | [0] <= i < [n*incx] step [incx] ; i -> sx[i]};
+}
+
+
+/*
+ * scopy
+ */
+inline
+float[.] scopy(int n, float[.] sx, int incx, float[.] sy, int incy)
+{
+  if(n < 1 || incx < 0 || incy < 1) {
+    result = sy;
+  } else {
+    result = {i -> sx[(i/incy)*incx] | [0] <= i < [n*incy] step [incy] ; i -> sy[i]};
+  }
+  return result;
+}
+
+
+/*
+ * saxpy
+ */
+inline
+float[.] saxpy(int n, float sa, float[.] sx, int incx, float[.] sy, int incy)
+{
+  if(sa == 0f || n < 1 || incx < 0 || incy < 1) {
+    result = sy;
+  } else {
+    result = {i -> sa * sx[(i/incy)*incx] + sy[i] | [0] <= i < [n*incy] step [incy] ; i -> sy[i]};
+  }
+  return result;
+}
+
+
+/*
+ * sdot
+ */
+inline
+float sdot(int n, float[.] sx, int incx, float[.] sy, int incy)
+{
+	if(n < 1 || incx < 0 || incy < 0) {
+		result = 0f;
+	} else {
+		result = sum( {i -> sx[i*incx] * sy[i*incy] | [0] <= i < [n]} );
+	}
+	return result;
+}
+
+
+/*
+ * sdsdot
+ */
+inline
+double sdsdot(int n, float sb, float[.] sx, int incx, float[.] sy, int incy)
+{
+	if(n < 1 || incx < 0 || incy < 0) {
+		result = tod(sb);
+	} else {
+		result = tod(sb) + sum( {i -> tod(sx[i*incx]) * tod(sy[i*incy]) | [0] <= i < [n] } );
+	}
+	return result;
+}
+
+/*
+ * snrm2
+ */
+inline
+float snrm2(int n, float[.] x, int incx)
+{
+	if(n < 1 || incx < 1) {
+		result = 0f;
+	} else {
+		result = sqrtf(sum( {i -> x[i]*x[i] | [0] <= i < [n*incx] step [incx]} ));
+	}
+	return result;
+}
+
+
+/*
+ * scnrm2
+ */
+inline
+float scnrm2(int n, complex[.] x, int incx)
+{
+	if(n < 1 || incx < 1) {
+		result = 0f;
+	} else {
+		x_prime = {i -> x[i*incx] | [0] <= i < [n] ; i -> zero() | i < [n*incx]};
+		result = sqrtf(tof(sum(normSq(x_prime))));
+	}
+	return result;
+}
+
+
+/*
+ * sasum
+ */
+inline
+float sasum(int n, float[.] sx, int incx)
+{
+  if(n < 1 || incx < 1) {
+    result = 0f;
+  } else {
+    result = sum( {i -> abs(sx[i]) | [0] <= i < [n*incx] step [incx]} );
+  }
+  return result;
+}
+
+
+/*
+ * isamax
+ */
+inline
+int isamax(int n, float[.] sx, int incx)
+{
+  if(n < 1 || incx < 1) {
+    max_i = -1;
+  } else {
+    max_i = 0;
+    max_v = 0f;
+    ix = 0;
+    for(i = 0; i < n; i++) {
+      if(abs(sx[ix]) > max_v) {
+        max_i = i;
+        max_v = abs(sx[ix]);
+      }
+      ix += incx;
+    }
+  }
+
+  return max_i;
+}
+
+
 
 inline
 double[.] blasCompress( int n, double[.] vec, int inc)
